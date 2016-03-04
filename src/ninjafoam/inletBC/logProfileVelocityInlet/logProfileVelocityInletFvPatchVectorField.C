@@ -29,6 +29,7 @@ License
 #include "fvPatchFieldMapper.H"
 #include "volFields.H"
 #include "surfaceFields.H"
+#include "wallDist.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -48,10 +49,10 @@ logProfileVelocityInletFvPatchVectorField::logProfileVelocityInletFvPatchVectorF
     uDirection_(0.0,0.0,0.0),
     inputWindHeight_Veg_(0),
     z0_(0),
-    Rd_(0),
-    relativeHeight_(0),
-    firstCellHeight_(0)
-{}
+    Rd_(0)
+{
+
+}
 
 
 logProfileVelocityInletFvPatchVectorField::logProfileVelocityInletFvPatchVectorField
@@ -67,13 +68,11 @@ logProfileVelocityInletFvPatchVectorField::logProfileVelocityInletFvPatchVectorF
     uDirection_(ptf.uDirection_),
     inputWindHeight_Veg_(ptf.inputWindHeight_Veg_),
     z0_(ptf.z0_),
-    Rd_(ptf.Rd_),
-    relativeHeight_(ptf.relativeHeight_),
-    firstCellHeight_(ptf.firstCellHeight_)
-{}
+    Rd_(ptf.Rd_)
+{
 
-/* used later in updateCoeffs() --> 
-   this constructor is the one called by simpleFoam */
+}
+
 logProfileVelocityInletFvPatchVectorField::logProfileVelocityInletFvPatchVectorField
 (
     const fvPatch& p,
@@ -86,100 +85,27 @@ logProfileVelocityInletFvPatchVectorField::logProfileVelocityInletFvPatchVectorF
     uDirection_(dict.lookup("uDirection")),
     inputWindHeight_Veg_(readScalar(dict.lookup("inputWindHeight_Veg"))),
     z0_(readScalar(dict.lookup("z0"))),
-    Rd_(readScalar(dict.lookup("Rd"))),
-    firstCellHeight_(readScalar(dict.lookup("firstCellHeight")))
+    Rd_(readScalar(dict.lookup("Rd")))
 {
-    // Access to face Centers
-    const pointField& faceCenters = patch().Cf();
-    scalarField Dist(faceCenters.size(), 0.0);
 
-    List<pointField> faceCenterField(Pstream::nProcs()); 
-    label nFace = faceCenters.size();
-    reduce(nFace, sumOp<label>()); 
-
-    pointField faceCenterPoints(0);
-    faceCenterField[Pstream::myProcNo()]=patch().Cf();
-    Pstream::gatherList(faceCenterField);
-
-    if(Pstream::master())
-    {	
-	forAll(faceCenterField, procI)
-	{
-		forAll(faceCenterField[procI],pointI)
-		{
-			faceCenterPoints.append(faceCenterField[procI][pointI]);
-		}
-	}
+    scalar ustar = UfreeStream_*0.41/Foam::log((inputWindHeight_Veg_)/z0_);
+    scalar ucalc(0.0);
+    vectorField Up(patch().Cf().size(), vector(0.0, 0.0, 0.0));
+    
+    const fvMesh& mesh = patch().boundaryMesh().mesh();
+    const volScalarField& y = wallDist(mesh).y(); //distance from cell centers
+    const scalarField yp(patch().patchInternalField(y)); //go from cell center --> patch
+  
+    // Loop over all the faces in that patch
+    forAll(Up, faceI )
+    {
+        Info<<"yp[faceI] = "<<yp[faceI]<<endl;
+        ucalc = ustar/0.41*Foam::log((yp[faceI])/z0_);
+        Up[faceI] = ucalc*uDirection_;
     }
-    Pstream::scatter(faceCenterPoints);
 
-    forAll(faceCenters, pointI)
-	{
+    operator==(Up);
 
-	point currentPt = faceCenters[pointI];
-	// Set to high values
-	Dist[pointI] = GREAT;
-	label minPointId = -1;
-	forAll(faceCenterPoints, pointJ)
-	{
-        //if current point is not the near-wall center point	   
-        if(mag(currentPt.z()-faceCenterPoints[pointJ].z()) > .1 )
- 	   {
-		    scalar checkOrdinate_FC = 0.0, checkOrdinate_CP = 0.0;
-		    // Lookup patch ids and check if its orientation is along west/east/south/north
-		    // If current patch is west_face or east_face, check the Y ordinates   		
-            const word& curPatchName = patch().name();
-		    if(curPatchName == "west_face" || curPatchName == "east_face")
-		    {
-		        checkOrdinate_FC = faceCenterPoints[pointJ].y();
-		        checkOrdinate_CP = currentPt.y();
-		    }
-		    else if(curPatchName == "north_face" || curPatchName == "south_face")
-		    {
-		        checkOrdinate_FC = faceCenterPoints[pointJ].x() ;
-		    	checkOrdinate_CP = currentPt.x();
-		    }
-		    else
-		    {
-         	    FatalErrorIn("logProfileVelocityInletFvPatchVectorField")
-     		       << "Boundary condition applied on incorrect patch"
-		       << abort(FatalError);
-    	    }
-            // Look for cells close to x or y coord (depending on the face) of currentPt 
-		    if( mag(checkOrdinate_FC - checkOrdinate_CP) < 100 )
-	            {
-                //if we are close in x or y dimension, 
-                //and closer to the ground than the previous iteration, 
-                //calc and store distance to ground for this face
-		        if( faceCenterPoints[pointJ].z() < Dist[pointI] )
-		        {
-                    //update distance to ground if we are in a lower cell than previous iteration
-			        Dist[pointI] = faceCenterPoints[pointJ].z();
-			        minPointId = pointJ; //point with z nearest to ground (the near-ground cell below currentPt)
-	    	    }
-		    }
-	    }
-	}
-
-	// If no other values are found (assuming the bracket range is sufficient)
-	if(Dist[pointI] == GREAT || minPointId == -1 || Dist[pointI] > currentPt.z() )
-	{
-	    Dist[pointI] = currentPt.z();
-	}
-
-	// Add the half first cell Height read from dictionary
-    //Info<<"firstCellHeight_ = "<<firstCellHeight_<<endl;
- 	
-    Dist[pointI] = currentPt.z() - Dist[pointI] + firstCellHeight_/2;
-	relativeHeight_.setSize(Dist.size());
-    relativeHeight_ = Dist;
-
-    //Info<<"currentPt.z() = "<<currentPt.z()<<endl;    
-    //Info<<"Dist[pointI] = "<<Dist[pointI]<<endl;
-
-	}
-
-    evaluate();
 }
 
 
@@ -194,10 +120,10 @@ logProfileVelocityInletFvPatchVectorField::logProfileVelocityInletFvPatchVectorF
     uDirection_(fcvpvf.uDirection_),
     inputWindHeight_Veg_(fcvpvf.inputWindHeight_Veg_),
     z0_(fcvpvf.z0_),
-    Rd_(fcvpvf.Rd_),
-    relativeHeight_(fcvpvf.relativeHeight_),
-    firstCellHeight_(fcvpvf.firstCellHeight_)
-{}
+    Rd_(fcvpvf.Rd_)
+{
+
+}
 
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
@@ -209,14 +135,15 @@ void logProfileVelocityInletFvPatchVectorField::updateCoeffs()
     scalar ucalc(0.0);
     vectorField Up(patch().Cf().size(), vector(0.0, 0.0, 0.0));
     
+    const fvMesh& mesh = patch().boundaryMesh().mesh();
+    const volScalarField& y = wallDist(mesh).y(); //distance from cell centers
+    const scalarField yp(patch().patchInternalField(y)); //go from cell center --> patch
+  
     // Loop over all the faces in that patch
     forAll(Up, faceI )
     {
-        // relative height from ground for face lists
-        scalar& AGL = relativeHeight_[faceI];
-
-        //Apply the log profile
-        ucalc = ustar/0.41*Foam::log((AGL)/z0_);
+        Info<<"yp[faceI] = "<<yp[faceI]<<endl;
+        ucalc = ustar/0.41*Foam::log((yp[faceI])/z0_);
         Up[faceI] = ucalc*uDirection_;
     }
 
