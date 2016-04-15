@@ -99,7 +99,6 @@ private:
     void ComputeDirection(); //converts direction from degrees to unit vector notation
     void SetInlets();
     void SetBcs();
-    int writeMoveDynamicMesh();
     int writeBlockMesh();
     int readDem(double &ratio_); //sets blockMesh data from DEM 
     int readLogFile(double &ratio); //sets blockMesh data from STL log file when DEM not available
@@ -132,9 +131,6 @@ private:
     int SurfaceTransformPoints();
     int SurfaceCheck();
     int RefineSurfaceLayer();
-    int MoveDynamicMesh();
-    int TopoSet();
-    int RefineMesh();
     int BlockMesh();
     int DecomposePar();
     int ReconstructParMesh();
