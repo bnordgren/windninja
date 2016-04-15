@@ -269,14 +269,18 @@ bool NinjaFoam::simulate_wind()
     input.Com->ninjaCom(ninjaComClass::ninjaNone, "Generating mesh...");
 
     checkCancel();
+    
 
-    /*refine mesh near the ground */
-    status = RefineSurfaceLayer();
-    if(status != 0){
-        input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during RefineSurfaceLayer().");
-        NinjaUnlinkTree( pszTempPath );
-        return NINJA_E_OTHER;
-    }
+    //Translate surface geometry by +150 in z-direction
+    //surfaceTransformPoints -translate '(0 0 150)' ${OBJ} ${OBJ}
+
+    //runApplication blockMesh
+    //runApplication snappyHexMesh -overwrite
+    //runApplication extrudeMesh
+
+    //Delete zero sized patch "bottom"
+    //runApplication createPatch -overwrite
+    
 
     input.Com->ninjaCom(ninjaComClass::ninjaNone, "Renumbering mesh...");
     status = RenumberMesh();
