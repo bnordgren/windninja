@@ -50,6 +50,7 @@ NinjaFoam::NinjaFoam() : ninja()
     latestTime = 0;
     cellCount = 0; 
     simpleFoamEndTime = 1000; //initial value in controlDict_simpleFoam
+    blockMeshDz = -1.0; //displacement height for blockMesh
 }
 
 /**
@@ -87,7 +88,7 @@ bool NinjaFoam::simulate_wind()
 {
     #ifdef _OPENMP
     startTotal = omp_get_wtime();
-	#endif
+    #endif
 
     checkCancel();
 
@@ -206,7 +207,8 @@ bool NinjaFoam::simulate_wind()
     /*-------------------------------------------------------------------*/
 
     input.Com->ninjaCom(ninjaComClass::ninjaNone, "Transforming surface points to output wind height...");
-    status = SurfaceTransformPoints();
+    status = SurfaceTransformPoints(0.0, 0.0, input.outputWindHeight, 
+                                CPLSPrintf("%s_out.stl", CPLGetBasename(input.dem.fileName.c_str())));
     if(status != 0){
         input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during surfaceTransformPoints().");
         NinjaUnlinkTree( pszTempPath );
@@ -271,10 +273,21 @@ bool NinjaFoam::simulate_wind()
     checkCancel();
     
 
-    //Translate surface geometry by +150 in z-direction
-    //surfaceTransformPoints -translate '(0 0 150)' ${OBJ} ${OBJ}
-
-    //runApplication blockMesh
+    //Translate surface geometry in z-direction
+    status = SurfaceTransformPoints(0.0, 0.0, blockMeshDz, 
+            CPLSPrintf("%s_displaced.stl", CPLGetBasename(input.dem.fileName.c_str())));
+    if(status != 0){
+        input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during surfaceTransformPoints().");
+        NinjaUnlinkTree( pszTempPath );
+        return NINJA_E_OTHER;
+    }
+    status = BlockMesh();
+    if(status != 0){
+        input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during blockMesh().");
+        NinjaUnlinkTree( pszTempPath );
+        return NINJA_E_OTHER;
+    }
+    return(0);
     //runApplication snappyHexMesh -overwrite
     //runApplication extrudeMesh
 
@@ -1037,29 +1050,31 @@ int NinjaFoam::readLogFile(double &expansionRatio)
 
 int NinjaFoam::readDem(double &expansionRatio)
 {
-    
+    //set blockMesh displacement height
+    blockMeshDz = 150.0; //maybe change to f(dz)
+
     // get some info from the DEM
     double dz = input.dem.get_maxValue() - input.dem.get_minValue();
     double dx = ( input.dem.get_xllCorner() + input.dem.get_xDimension() ) - input.dem.get_xllCorner();
     double dy = ( input.dem.get_yllCorner() + input.dem.get_yDimension() ) - input.dem.get_yllCorner();
     double xBuffer, yBuffer;
     
-    xBuffer = dx*0.01; // buffers for MDM
+    xBuffer = dx*0.01; //buffer for blockMesh
     yBuffer = dy*0.01;
     
     bbox.push_back( input.dem.get_xllCorner() + xBuffer ); //xmin 
     bbox.push_back( input.dem.get_yllCorner() + yBuffer ); //ymin
-    bbox.push_back( input.dem.get_maxValue() * 1.1 ); //zmin (should be above highest point in DEM for MDM)
+    bbox.push_back( input.dem.get_minValue() * 0.9 + blockMeshDz); //zmin (should be below lowest point in DEM)
     bbox.push_back( input.dem.get_xllCorner() + input.dem.get_xDimension() - xBuffer ); //xmax
     bbox.push_back( input.dem.get_yllCorner() + input.dem.get_yDimension() - yBuffer ); //ymax
-    bbox.push_back( input.dem.get_maxValue() + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) ); //zmax
+    bbox.push_back( input.dem.get_maxValue() + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) + blockMeshDz); //zmax
 
     double meshVolume;
     double cellVolume;
     double side;
 
     meshVolume = (bbox[3] - bbox[0]) * (bbox[4] - bbox[1]) * (bbox[5] - bbox[2]); // total volume for block mesh
-    cellCount = 0.5 * input.meshCount; //half the cells in the blockMesh and half reserved for refineMesh
+    cellCount = 0.5 * input.meshCount; //half the cells in the blockMesh and half reserved for SHM
     cellVolume = meshVolume/cellCount; // volume of 1 cell
     side = std::pow(cellVolume, (1.0/3.0)); // length of side of regular hex cell
 
@@ -1267,7 +1282,10 @@ int NinjaFoam::CopyFile(const char *pszInput, const char *pszOutput, std::string
     return NINJA_SUCCESS;
 }
 
-int NinjaFoam::SurfaceTransformPoints()
+int NinjaFoam::SurfaceTransformPoints(double dx,
+                                    double dy,
+                                    double dz,
+                                    std::string outFile)
 {
     int nRet = -1;
 
@@ -1275,9 +1293,9 @@ int NinjaFoam::SurfaceTransformPoints()
                                       "-case",
                                       pszTempPath,
                                       "-translate",
-                                      CPLSPrintf("(0 0 %.0f)", input.outputWindHeight),
+                                      CPLSPrintf("(%.0f %.0f %.0f)", dx, dy, dz),
                                       CPLSPrintf("%s/constant/triSurface/%s.stl", pszTempPath, CPLGetBasename(input.dem.fileName.c_str())),
-                                      CPLSPrintf("%s/constant/triSurface/%s_out.stl", pszTempPath, CPLGetBasename(input.dem.fileName.c_str())),
+                                      CPLSPrintf("%s/constant/triSurface/%s", pszTempPath, outFile.c_str()),
                                       NULL };
 
     VSILFILE *fout = VSIFOpenL(CPLFormFilename(pszTempPath, "surfaceTransformPoints.log", ""), "w");

@@ -112,6 +112,7 @@ private:
     std::string inletoutletvalue;
     std::string template_;
     
+    double blockMeshDz; //displacement height for blockMesh
     std::vector<std::string> bboxField;
     std::vector<std::string> cellField;
     std::vector<double> bbox;
@@ -128,7 +129,7 @@ private:
     int ReplaceKeys(std::string &s, std::string k, std::string v, int n = INT_MAX);
     int CopyFile(const char *pszInput, const char *pszOutput, std::string key="", std::string value="");
     
-    int SurfaceTransformPoints();
+    int SurfaceTransformPoints(double dx, double dy, double dz, std::string outFile);
     int SurfaceCheck();
     int RefineSurfaceLayer();
     int BlockMesh();
