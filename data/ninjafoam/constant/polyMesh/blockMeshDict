@@ -65,7 +65,7 @@ patches
     (
         (1 5 4 0)
     )
-    wall minZ
+    wall ground_zone0
     (
         (0 3 2 1)
     )

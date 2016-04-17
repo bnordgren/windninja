@@ -46,7 +46,7 @@ dictionaryReplacement
         {
             type            symmetryPlane;
        }
-    minZ
+    ground_zone0
         {
             type            wall;
        }  

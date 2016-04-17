@@ -17,7 +17,7 @@ FoamFile
 constructFrom mesh;
 sourceCase "$FOAM_CASE";
 
-sourcePatches (ground);
+sourcePatches (ground_zone0);
 exposedPatchName bottom;
 
 extrudeModel        linearDirection;
@@ -29,7 +29,7 @@ linearDirectionCoeffs
 }
 
 nLayers 10;
-expansionRatio 0.83;
+expansionRatio 1.0;
 
 flipNormals false;
 mergeFaces false;

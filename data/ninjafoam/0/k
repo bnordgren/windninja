@@ -22,7 +22,7 @@ internalField   uniform 50;
 boundaryField
 {
 $boundaryField$    
-    minZ
+    ground_zone0
     {
         type            kqRWallFunction;
         value           uniform 0.1;

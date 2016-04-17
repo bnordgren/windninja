@@ -133,6 +133,8 @@ private:
     int SurfaceCheck();
     int RefineSurfaceLayer();
     int BlockMesh();
+    int SnappyHexMesh();
+    int ExtrudeMesh();
     int DecomposePar();
     int ReconstructParMesh();
     int ReconstructPar();

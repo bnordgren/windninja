@@ -22,7 +22,7 @@ internalField   uniform 1;
 boundaryField
 {
 $boundaryField$
-    minZ
+    ground_zone0
     {
         type            $wallFunction$;
         Cmu             0.09;

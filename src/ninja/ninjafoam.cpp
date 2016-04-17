@@ -274,8 +274,7 @@ bool NinjaFoam::simulate_wind()
     
 
     //Translate surface geometry in z-direction
-    status = SurfaceTransformPoints(0.0, 0.0, blockMeshDz, 
-            CPLSPrintf("%s_displaced.stl", CPLGetBasename(input.dem.fileName.c_str())));
+    status = SurfaceTransformPoints(0.0, 0.0, blockMeshDz, ("ground.stl"));
     if(status != 0){
         input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during surfaceTransformPoints().");
         NinjaUnlinkTree( pszTempPath );
@@ -287,13 +286,29 @@ bool NinjaFoam::simulate_wind()
         NinjaUnlinkTree( pszTempPath );
         return NINJA_E_OTHER;
     }
+    status = DecomposePar();
+    if(status != 0){
+        input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during decomposePar().");
+        NinjaUnlinkTree( pszTempPath );
+        return NINJA_E_OTHER;
+    }
+    status = SnappyHexMesh();
+    if(status != 0){
+        input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during snappyHexMesh().");
+        NinjaUnlinkTree( pszTempPath );
+        return NINJA_E_OTHER;
+    }
+    status = ExtrudeMesh();
+    if(status != 0){
+        input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during extrudeMesh().");
+        NinjaUnlinkTree( pszTempPath );
+        return NINJA_E_OTHER;
+    }
     return(0);
-    //runApplication snappyHexMesh -overwrite
-    //runApplication extrudeMesh
 
     //Delete zero sized patch "bottom"
     //runApplication createPatch -overwrite
-    
+    // rm 0/cellLevel 0/pointLevel //not sure why these are written here??    
 
     input.Com->ninjaCom(ninjaComClass::ninjaNone, "Renumbering mesh...");
     status = RenumberMesh();
@@ -1212,6 +1227,155 @@ int NinjaFoam::writeBlockMesh()
     VSIFCloseL(fout);
 
     return NINJA_SUCCESS;
+}
+
+int NinjaFoam::ExtrudeMesh()
+{
+    int nRet = -1;
+    
+    CopyFile(CPLFormFilename(pszTempPath, "system/extrudeMeshDict", ""),
+           CPLFormFilename(pszTempPath, "system/extrudeMeshDict",""),
+           "$FOAM_CASE", pszTempPath);
+    
+    char data[PIPE_BUFFER_SIZE + 1];
+    int pos, startPos;
+    std::string s, t;
+    double p;
+
+    if(input.numberCPUs > 1){
+#ifdef WIN32
+        const char *const papszArgv[] = { "mpiexec",
+                                      "-env",
+                                      "MPI_BUFFER_SIZE",
+                                      "20000000",
+                                      "-n",
+                                      CPLSPrintf("%d", input.numberCPUs),
+                                      "extrudeMesh",
+                                      "-case",
+                                      pszTempPath,
+                                      "-parallel",
+                                       NULL };
+#else
+        CPLSetConfigOption("MPI_BUFFER_SIZE", "20000000");
+        const char *const papszArgv[] = { "mpiexec",
+                                      "-np",
+                                      CPLSPrintf("%d", input.numberCPUs),
+                                      "extrudeMesh",
+                                      "-case",
+                                      pszTempPath,
+                                      "-parallel",
+                                       NULL };
+#endif
+
+        CPLSpawnedProcess *sp = CPLSpawnAsync(NULL, papszArgv, FALSE, TRUE, TRUE, NULL);
+        CPL_FILE_HANDLE out_child = CPLSpawnAsyncGetInputFileHandle(sp);
+
+        while(CPLPipeRead(out_child, &data, sizeof(data)-1)){
+            checkCancel();
+            data[sizeof(data)-1] = '\0';
+            s.append(data);
+            CPLDebug("NINJAFOAM", "simpleFoam: %s", data);
+        }
+        nRet = CPLSpawnAsyncFinish(sp, TRUE, FALSE);
+    }
+    else{
+        const char *const papszArgv[] = { "extrudeMesh",
+                                       "-case",
+                                       pszTempPath,
+                                       NULL };
+
+        CPLSpawnedProcess *sp = CPLSpawnAsync(NULL, papszArgv, FALSE, TRUE, TRUE, NULL);
+        CPL_FILE_HANDLE out_child = CPLSpawnAsyncGetInputFileHandle(sp);
+
+        while(CPLPipeRead(out_child, &data, sizeof(data)-1)){
+            data[sizeof(data)-1] = '\0';
+            s.append(data);
+        }
+        nRet = CPLSpawnAsyncFinish(sp, TRUE, FALSE);
+    }
+    
+    // write simpleFoam stdout to a log file 
+    VSILFILE *fout = VSIFOpenL(CPLFormFilename(pszTempPath, "log.extrudeMesh", ""), "w");
+    const char * d = s.c_str();
+    int nSize = strlen(d);
+    VSIFWriteL(d, nSize, 1, fout);
+    VSIFCloseL(fout);
+
+    return nRet;
+}
+
+int NinjaFoam::SnappyHexMesh()
+{
+    int nRet = -1;
+    
+    char data[PIPE_BUFFER_SIZE + 1];
+    int pos, startPos;
+    std::string s, t;
+    double p;
+
+    if(input.numberCPUs > 1){
+#ifdef WIN32
+        const char *const papszArgv[] = { "mpiexec",
+                                      "-env",
+                                      "MPI_BUFFER_SIZE",
+                                      "20000000",
+                                      "-n",
+                                      CPLSPrintf("%d", input.numberCPUs),
+                                      "snappyHexMesh",
+                                      "-case",
+                                      pszTempPath,
+                                      "-overwrite",
+                                      "-parallel",
+                                       NULL };
+#else
+        CPLSetConfigOption("MPI_BUFFER_SIZE", "20000000");
+        const char *const papszArgv[] = { "mpiexec",
+                                      "-np",
+                                      CPLSPrintf("%d", input.numberCPUs),
+                                      "snappyHexMesh",
+                                      "-case",
+                                      pszTempPath,
+                                      "-overwrite",
+                                      "-parallel",
+                                       NULL };
+#endif
+
+        CPLSpawnedProcess *sp = CPLSpawnAsync(NULL, papszArgv, FALSE, TRUE, TRUE, NULL);
+        CPL_FILE_HANDLE out_child = CPLSpawnAsyncGetInputFileHandle(sp);
+
+        while(CPLPipeRead(out_child, &data, sizeof(data)-1)){
+            checkCancel();
+            data[sizeof(data)-1] = '\0';
+            s.append(data);
+            CPLDebug("NINJAFOAM", "simpleFoam: %s", data);
+        }
+        nRet = CPLSpawnAsyncFinish(sp, TRUE, FALSE);
+    }
+    else{
+        const char *const papszArgv[] = { "snappyHexMesh",
+                                       "-case",
+                                       "-overwrite",
+                                       pszTempPath,
+                                       NULL };
+
+        CPLSpawnedProcess *sp = CPLSpawnAsync(NULL, papszArgv, FALSE, TRUE, TRUE, NULL);
+        CPL_FILE_HANDLE out_child = CPLSpawnAsyncGetInputFileHandle(sp);
+
+        while(CPLPipeRead(out_child, &data, sizeof(data)-1)){
+            data[sizeof(data)-1] = '\0';
+            s.append(data);
+        }
+        nRet = CPLSpawnAsyncFinish(sp, TRUE, FALSE);
+    }
+    
+    // write simpleFoam stdout to a log file 
+    VSILFILE *fout = VSIFOpenL(CPLFormFilename(pszTempPath, "log.snappyHexMesh", ""), "w");
+    const char * d = s.c_str();
+    int nSize = strlen(d);
+    VSIFWriteL(d, nSize, 1, fout);
+    VSIFCloseL(fout);
+
+    return nRet;
 }
 
 /*

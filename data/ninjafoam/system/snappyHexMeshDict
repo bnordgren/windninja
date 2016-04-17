@@ -22,7 +22,7 @@ addLayers       off;
 
 geometry
 {
-    big_butte_small_displaced.stl
+    ground.stl
     {
         type triSurfaceMesh;
         name ground;

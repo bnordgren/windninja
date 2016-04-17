@@ -22,7 +22,7 @@ internalField   uniform 0;
 boundaryField
 {
 $boundaryField$
-    minZ
+    ground_zone0
     {
         type            zeroGradient;
     }

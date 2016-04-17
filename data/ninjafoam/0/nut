@@ -42,7 +42,7 @@ value uniform 0;
         type            calculated;
         value           uniform 0;
     }
-    minZ
+    ground_zone0
     {
         type            $wallFunction$;
         Cmu             0.09;
