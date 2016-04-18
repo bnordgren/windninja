@@ -298,6 +298,8 @@ bool NinjaFoam::simulate_wind()
         NinjaUnlinkTree( pszTempPath );
         return NINJA_E_OTHER;
     }
+    // extrudeMesh doesn't seem to work in parallel in 2.2.0
+    status = ReconstructParMesh();
     status = ExtrudeMesh();
     if(status != 0){
         input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during extrudeMesh().");
@@ -1242,59 +1244,21 @@ int NinjaFoam::ExtrudeMesh()
     std::string s, t;
     double p;
 
-    if(input.numberCPUs > 1){
-#ifdef WIN32
-        const char *const papszArgv[] = { "mpiexec",
-                                      "-env",
-                                      "MPI_BUFFER_SIZE",
-                                      "20000000",
-                                      "-n",
-                                      CPLSPrintf("%d", input.numberCPUs),
-                                      "extrudeMesh",
-                                      "-case",
-                                      pszTempPath,
-                                      "-parallel",
-                                       NULL };
-#else
-        CPLSetConfigOption("MPI_BUFFER_SIZE", "20000000");
-        const char *const papszArgv[] = { "mpiexec",
-                                      "-np",
-                                      CPLSPrintf("%d", input.numberCPUs),
-                                      "extrudeMesh",
-                                      "-case",
-                                      pszTempPath,
-                                      "-parallel",
-                                       NULL };
-#endif
+    const char *const papszArgv[] = { "extrudeMesh",
+                                   "-case",
+                                   pszTempPath,
+                                   NULL };
 
-        CPLSpawnedProcess *sp = CPLSpawnAsync(NULL, papszArgv, FALSE, TRUE, TRUE, NULL);
-        CPL_FILE_HANDLE out_child = CPLSpawnAsyncGetInputFileHandle(sp);
+    CPLSpawnedProcess *sp = CPLSpawnAsync(NULL, papszArgv, FALSE, TRUE, TRUE, NULL);
+    CPL_FILE_HANDLE out_child = CPLSpawnAsyncGetInputFileHandle(sp);
 
-        while(CPLPipeRead(out_child, &data, sizeof(data)-1)){
-            checkCancel();
-            data[sizeof(data)-1] = '\0';
-            s.append(data);
-            CPLDebug("NINJAFOAM", "simpleFoam: %s", data);
-        }
-        nRet = CPLSpawnAsyncFinish(sp, TRUE, FALSE);
+    while(CPLPipeRead(out_child, &data, sizeof(data)-1)){
+        data[sizeof(data)-1] = '\0';
+        s.append(data);
     }
-    else{
-        const char *const papszArgv[] = { "extrudeMesh",
-                                       "-case",
-                                       pszTempPath,
-                                       NULL };
-
-        CPLSpawnedProcess *sp = CPLSpawnAsync(NULL, papszArgv, FALSE, TRUE, TRUE, NULL);
-        CPL_FILE_HANDLE out_child = CPLSpawnAsyncGetInputFileHandle(sp);
-
-        while(CPLPipeRead(out_child, &data, sizeof(data)-1)){
-            data[sizeof(data)-1] = '\0';
-            s.append(data);
-        }
-        nRet = CPLSpawnAsyncFinish(sp, TRUE, FALSE);
-    }
+    nRet = CPLSpawnAsyncFinish(sp, TRUE, FALSE);
     
-    // write simpleFoam stdout to a log file 
+    // write stdout to a log file 
     VSILFILE *fout = VSIFOpenL(CPLFormFilename(pszTempPath, "log.extrudeMesh", ""), "w");
     const char * d = s.c_str();
     int nSize = strlen(d);
@@ -1368,7 +1332,7 @@ int NinjaFoam::SnappyHexMesh()
         nRet = CPLSpawnAsyncFinish(sp, TRUE, FALSE);
     }
     
-    // write simpleFoam stdout to a log file 
+    // write stdout to a log file 
     VSILFILE *fout = VSIFOpenL(CPLFormFilename(pszTempPath, "log.snappyHexMesh", ""), "w");
     const char * d = s.c_str();
     int nSize = strlen(d);
@@ -1573,7 +1537,7 @@ int NinjaFoam::ReconstructParMesh()
     const char *const papszArgv[] = { "reconstructParMesh", 
                                       "-case",
                                       pszTempPath,
-                                      "-latestTime", 
+                                      "-constant", 
                                       NULL };
     
     VSILFILE *fout = VSIFOpenL(CPLFormFilename(pszTempPath, "log.reconstructParMesh", ""), "w");
