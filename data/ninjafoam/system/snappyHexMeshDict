@@ -49,12 +49,12 @@ castellatedMeshControls
     {
     }
 
-    maxLocalCells 1000000;
-    maxGlobalCells 4500000;
+    maxLocalCells 50000;
+    maxGlobalCells 100000;
     minRefinementCells 10;
     nCellsBetweenLevels 1;
-    allowFreeStandingZoneFaces true;
-    resolveFeatureAngle 30.0;
+    allowFreeStandingZoneFaces false;
+    resolveFeatureAngle 10.0;
 
     locationInMesh (334000 4.805e+06 2300); // Offset from (0 0 0) to avoid
                                      // coinciding with face or edge
@@ -93,7 +93,7 @@ addLayersControls
 meshQualityControls
 {
 //    minTetQuality -1e+30;
-    maxNonOrtho 70.0;
+    maxNonOrtho 40.0;
     maxBoundarySkewness 20.0;// previous 20
     maxInternalSkewness 4.0;//previous 5
     maxConcave 80.0;

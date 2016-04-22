@@ -34,6 +34,7 @@ NinjaFoam::NinjaFoam() : ninja()
     pszTempPath = NULL;
     pszVrtMem = NULL;
     pszGridFilename = NULL;
+    pszCoarsenedDem = NULL;
 
     boundary_name = "";
     terrainName = "NAME";
@@ -50,7 +51,10 @@ NinjaFoam::NinjaFoam() : ninja()
     latestTime = 0;
     cellCount = 0; 
     simpleFoamEndTime = 1000; //initial value in controlDict_simpleFoam
-    blockMeshDz = -1.0; //displacement height for blockMesh
+    blockMeshDz = 150.0; //displacement height for blockMesh
+
+    meshResolution = -1.0; //approx resolution of OpenFOAM mesh
+    stlResolution = 150.0; //resolution of stl surface for meshing/output sampling
 }
 
 /**
@@ -82,6 +86,7 @@ NinjaFoam::~NinjaFoam()
     CPLFree( (void*)pszTempPath );
     CPLFree( (void*)pszVrtMem );
     CPLFree( (void*)pszGridFilename );
+    CPLFree( (void*)pszCoarsenedDem );
 }
 
 bool NinjaFoam::simulate_wind()
@@ -168,19 +173,31 @@ bool NinjaFoam::simulate_wind()
 
     input.Com->ninjaCom(ninjaComClass::ninjaNone, "Converting DEM to STL format...");
 
+    //coarsen DEM for snappyHexMesh
+    pszCoarsenedDem = CPLStrdup(CPLFormFilename(pszTempPath, "ninjaFoamSurface", ".asc"));
+
+    CPLDebug("NINJAFOAM", "original DEM resolution = %f", input.dem.get_cellSize());
+    
+    if(input.dem.get_cellSize() < stlResolution){
+        input.dem.resample_Grid_in_place(stlResolution, AsciiGrid<double>::order0);
+    }
+
+    input.dem.write_Grid(pszCoarsenedDem, 2);
+
+    CPLDebug("NINJAFOAM", "original DEM resolution = %f", input.dem.get_cellSize());
+
     const char *pszStlFileName = CPLStrdup(CPLFormFilename(
                 (CPLSPrintf("%s/constant/triSurface/", pszTempPath)),
-                CPLGetBasename(input.dem.fileName.c_str()), ".stl"));
+                "ground", ".stl"));
+                //CPLGetBasename(input.dem.fileName.c_str()), ".stl"));
 
     int nBand = 1;
-    const char * inFile = input.dem.fileName.c_str();
     CPLErr eErr;
 
-    eErr = NinjaElevationToStl(inFile,
+    eErr = NinjaElevationToStl(pszCoarsenedDem,
                         pszStlFileName,
                         nBand,
                         NinjaStlBinary,
-                        //NinjaStlAscii,
                         NULL);
 
     CPLFree((void*)pszStlFileName);
@@ -280,37 +297,54 @@ bool NinjaFoam::simulate_wind()
         NinjaUnlinkTree( pszTempPath );
         return NINJA_E_OTHER;
     }
+
+    input.Com->ninjaCom(ninjaComClass::ninjaNone, "Running blockMesh...");
     status = BlockMesh();
     if(status != 0){
         input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during blockMesh().");
         NinjaUnlinkTree( pszTempPath );
         return NINJA_E_OTHER;
     }
+
+    input.Com->ninjaCom(ninjaComClass::ninjaNone, "Decomposing domain for parallel processing...");
     status = DecomposePar();
     if(status != 0){
         input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during decomposePar().");
         NinjaUnlinkTree( pszTempPath );
         return NINJA_E_OTHER;
     }
+
+    input.Com->ninjaCom(ninjaComClass::ninjaNone, "Running snappyHexMesh...");
     status = SnappyHexMesh();
     if(status != 0){
         input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during snappyHexMesh().");
         NinjaUnlinkTree( pszTempPath );
         return NINJA_E_OTHER;
     }
+
+    finalFirstCellHeight = initialFirstCellHeight/4; //refinement level (2 2)
+    latestTime = 0; 
+    UpdateDictFiles();
+    
     // extrudeMesh doesn't seem to work in parallel in 2.2.0
+    input.Com->ninjaCom(ninjaComClass::ninjaNone, "Reconstructing domain...");
     status = ReconstructParMesh();
+
+    input.Com->ninjaCom(ninjaComClass::ninjaNone, "Running extrudeMesh...");
     status = ExtrudeMesh();
     if(status != 0){
         input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during extrudeMesh().");
         NinjaUnlinkTree( pszTempPath );
         return NINJA_E_OTHER;
     }
-    return(0);
-
-    //Delete zero sized patch "bottom"
-    //runApplication createPatch -overwrite
-    // rm 0/cellLevel 0/pointLevel //not sure why these are written here??    
+    
+    //Delete zero sized patch "minZ"
+    status = CreatePatch();
+    if(status != 0){
+        input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during createPatch().");
+        NinjaUnlinkTree( pszTempPath );
+        return NINJA_E_OTHER;
+    }
 
     input.Com->ninjaCom(ninjaComClass::ninjaNone, "Renumbering mesh...");
     status = RenumberMesh();
@@ -379,6 +413,15 @@ bool NinjaFoam::simulate_wind()
 
     checkCancel();
 
+    if(input.numberCPUs > 1){
+        input.Com->ninjaCom(ninjaComClass::ninjaNone, "Reconstructing domain...");
+        status = ReconstructPar();
+        if(status != 0){
+            input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during reconstructPar().");
+            NinjaUnlinkTree( pszTempPath );
+            return NINJA_E_OTHER;
+        }
+    }
     /*-------------------------------------------------------------------*/
     /* Sample at requested output height                                 */
     /*-------------------------------------------------------------------*/
@@ -1068,7 +1111,7 @@ int NinjaFoam::readLogFile(double &expansionRatio)
 int NinjaFoam::readDem(double &expansionRatio)
 {
     //set blockMesh displacement height
-    blockMeshDz = 150.0; //maybe change to f(dz)
+    //blockMeshDz = f(dz) ??
 
     // get some info from the DEM
     double dz = input.dem.get_maxValue() - input.dem.get_minValue();
@@ -1081,7 +1124,7 @@ int NinjaFoam::readDem(double &expansionRatio)
     
     bbox.push_back( input.dem.get_xllCorner() + xBuffer ); //xmin 
     bbox.push_back( input.dem.get_yllCorner() + yBuffer ); //ymin
-    bbox.push_back( input.dem.get_minValue() * 0.9 + blockMeshDz); //zmin (should be below lowest point in DEM)
+    bbox.push_back( input.dem.get_minValue() * 0.9);// + blockMeshDz); //zmin (should be below lowest point in DEM)
     bbox.push_back( input.dem.get_xllCorner() + input.dem.get_xDimension() - xBuffer ); //xmax
     bbox.push_back( input.dem.get_yllCorner() + input.dem.get_yDimension() - yBuffer ); //ymax
     bbox.push_back( input.dem.get_maxValue() + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) + blockMeshDz); //zmax
@@ -1231,6 +1274,23 @@ int NinjaFoam::writeBlockMesh()
     return NINJA_SUCCESS;
 }
 
+int NinjaFoam::CreatePatch()
+{
+    int nRet = -1;
+    
+    const char *const papszArgv[] = { "createPatch",
+                                   "-case",
+                                   pszTempPath,
+                                   "-overwrite",
+                                   NULL };
+
+    VSILFILE *fout = VSIFOpenL(CPLFormFilename(pszTempPath, "createPatch.log", ""), "w");
+    nRet = CPLSpawn(papszArgv, NULL, fout, TRUE); 
+    VSIFCloseL(fout);
+
+    return nRet;
+}
+
 int NinjaFoam::ExtrudeMesh()
 {
     int nRet = -1;
@@ -1239,30 +1299,13 @@ int NinjaFoam::ExtrudeMesh()
            CPLFormFilename(pszTempPath, "system/extrudeMeshDict",""),
            "$FOAM_CASE", pszTempPath);
     
-    char data[PIPE_BUFFER_SIZE + 1];
-    int pos, startPos;
-    std::string s, t;
-    double p;
-
     const char *const papszArgv[] = { "extrudeMesh",
                                    "-case",
                                    pszTempPath,
                                    NULL };
 
-    CPLSpawnedProcess *sp = CPLSpawnAsync(NULL, papszArgv, FALSE, TRUE, TRUE, NULL);
-    CPL_FILE_HANDLE out_child = CPLSpawnAsyncGetInputFileHandle(sp);
-
-    while(CPLPipeRead(out_child, &data, sizeof(data)-1)){
-        data[sizeof(data)-1] = '\0';
-        s.append(data);
-    }
-    nRet = CPLSpawnAsyncFinish(sp, TRUE, FALSE);
-    
-    // write stdout to a log file 
-    VSILFILE *fout = VSIFOpenL(CPLFormFilename(pszTempPath, "log.extrudeMesh", ""), "w");
-    const char * d = s.c_str();
-    int nSize = strlen(d);
-    VSIFWriteL(d, nSize, 1, fout);
+    VSILFILE *fout = VSIFOpenL(CPLFormFilename(pszTempPath, "extrudeMesh.log", ""), "w");
+    nRet = CPLSpawn(papszArgv, NULL, fout, TRUE); 
     VSIFCloseL(fout);
 
     return nRet;
@@ -1422,7 +1465,8 @@ int NinjaFoam::SurfaceTransformPoints(double dx,
                                       pszTempPath,
                                       "-translate",
                                       CPLSPrintf("(%.0f %.0f %.0f)", dx, dy, dz),
-                                      CPLSPrintf("%s/constant/triSurface/%s.stl", pszTempPath, CPLGetBasename(input.dem.fileName.c_str())),
+                                      CPLSPrintf("%s/constant/triSurface/%s.stl", pszTempPath, "ground"),
+                                      //CPLSPrintf("%s/constant/triSurface/%s.stl", pszTempPath, CPLGetBasename(input.dem.fileName.c_str())),
                                       CPLSPrintf("%s/constant/triSurface/%s", pszTempPath, outFile.c_str()),
                                       NULL };
 
