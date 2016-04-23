@@ -208,6 +208,7 @@ bool NinjaFoam::simulate_wind()
         return NINJA_E_OTHER;
     }
 
+
     checkCancel();
 
     if(input.stlFile != "!set"){
@@ -1315,6 +1316,27 @@ int NinjaFoam::SnappyHexMesh()
 {
     int nRet = -1;
     
+    double x, y, z;
+    x = (bbox[0] + bbox[3])/2;
+    y = (bbox[1] + bbox[4])/2;
+    z = (bbox[2] + bbox[5])/2;
+
+    int nLocalCells = input.meshCount/2; 
+    int nGlobalCells = input.meshCount;
+
+    CopyFile(CPLFormFilename(pszTempPath, "system/snappyHexMeshDict", ""),
+            CPLFormFilename(pszTempPath, "system/snappyHexMeshDict", ""),
+            "locationInMesh (-1 -1 -1)",
+            CPLSPrintf("locationInMesh (%.2f %.2f %.2f)", x, y, z));
+    CopyFile(CPLFormFilename(pszTempPath, "system/snappyHexMeshDict", ""),
+            CPLFormFilename(pszTempPath, "system/snappyHexMeshDict", ""),
+            "maxLocalCells -1",
+            CPLSPrintf("maxLocalCells %d", nLocalCells));
+    CopyFile(CPLFormFilename(pszTempPath, "system/snappyHexMeshDict", ""),
+            CPLFormFilename(pszTempPath, "system/snappyHexMeshDict", ""),
+            "maxGlobalCells -1",
+            CPLSPrintf("maxGlobalCells %d", nGlobalCells));
+
     char data[PIPE_BUFFER_SIZE + 1];
     int pos, startPos;
     std::string s, t;

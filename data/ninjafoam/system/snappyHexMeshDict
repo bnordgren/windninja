@@ -49,14 +49,14 @@ castellatedMeshControls
     {
     }
 
-    maxLocalCells 50000;
-    maxGlobalCells 100000;
+    maxLocalCells -1;
+    maxGlobalCells -1;
     minRefinementCells 10;
     nCellsBetweenLevels 1;
     allowFreeStandingZoneFaces false;
     resolveFeatureAngle 10.0;
 
-    locationInMesh (334000 4.805e+06 2300); // Offset from (0 0 0) to avoid
+    locationInMesh (-1 -1 -1); // Offset from (0 0 0) to avoid
                                      // coinciding with face or edge
 }
 
