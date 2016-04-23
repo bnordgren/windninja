@@ -207,19 +207,19 @@ CPLErr NinjaElevationToStl( const char *pszInput,
         {
             a.x = j * dfXRes + fXOffset;
             a.y = i * dfYRes + fYOffset;
-            a.z = pafScanline[j];
+            a.z = pafScanline[j+i*nOutXSize];
 
             b.x = ( j + 1 ) * dfXRes + fXOffset;
             b.y = a.y;
-            b.z = pafScanline[j + 1];
+            b.z = pafScanline[(j+i*nOutXSize) + 1];
 
             c.x = a.x;
             c.y = ( i + 1 ) * dfYRes + fYOffset;
-            c.z = pafScanline[j + nOutXSize];
+            c.z = pafScanline[(j+i*nOutXSize) + nOutXSize];
 
             d.x = b.x;
             d.y = c.y;
-            d.z = pafScanline[j + nOutXSize + 1];
+            d.z = pafScanline[(j+i*nOutXSize) + nOutXSize + 1];
 
             v1.x = c.x - a.x;
             v1.y = c.y - a.y;
