@@ -205,16 +205,16 @@ CPLErr NinjaElevationToStl( const char *pszInput,
     {
         for( j = 0; j < nOutXSize - 1; j++ )
         {
-            a.x = adfGeoTransform[0] + j * dfXRes + fXOffset;
-            a.y = adfGeoTransform[3] + i * dfYRes + fYOffset;
+            a.x = j * dfXRes + fXOffset;
+            a.y = i * dfYRes + fYOffset;
             a.z = pafScanline[j];
 
-            b.x = adfGeoTransform[0] + ( j + 1 ) * dfXRes + fXOffset;
+            b.x = ( j + 1 ) * dfXRes + fXOffset;
             b.y = a.y;
             b.z = pafScanline[j + 1];
 
             c.x = a.x;
-            c.y = adfGeoTransform[3] + ( i + 1 ) * dfYRes + fYOffset;
+            c.y = ( i + 1 ) * dfYRes + fYOffset;
             c.z = pafScanline[j + nOutXSize];
 
             d.x = b.x;

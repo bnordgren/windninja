@@ -1123,12 +1123,12 @@ int NinjaFoam::readDem(double &expansionRatio)
     xBuffer = dx*0.01; //buffer for blockMesh
     yBuffer = dy*0.01;
     
-    bbox.push_back( input.dem.get_xllCorner() + xBuffer ); //xmin 
-    bbox.push_back( input.dem.get_yllCorner() + yBuffer ); //ymin
-    bbox.push_back( input.dem.get_minValue() * 0.9);// + blockMeshDz); //zmin (should be below lowest point in DEM)
-    bbox.push_back( input.dem.get_xllCorner() + input.dem.get_xDimension() - xBuffer ); //xmax
-    bbox.push_back( input.dem.get_yllCorner() + input.dem.get_yDimension() - yBuffer ); //ymax
-    bbox.push_back( input.dem.get_maxValue() + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) + blockMeshDz); //zmax
+    bbox.push_back( xBuffer ); //xmin 
+    bbox.push_back( yBuffer ); //ymin
+    bbox.push_back( input.dem.get_maxValue() * 1.1 ); //zmin (should be above highest point in DEM for MDM)
+    bbox.push_back( input.dem.get_xDimension() - xBuffer ); //xmax
+    bbox.push_back( input.dem.get_yDimension() - yBuffer ); //ymax
+    bbox.push_back( input.dem.get_maxValue() + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) ); //zmax
 
     double meshVolume;
     double cellVolume;
@@ -2012,8 +2012,8 @@ int NinjaFoam::SampleCloud()
     while( (hFeature = OGR_L_GetNextFeature( hLayer )) != NULL )
     {
         hGeometry = OGR_F_GetGeometryRef( hFeature );
-        dfX = OGR_G_GetX( hGeometry, 0 );
-        dfY = OGR_G_GetY( hGeometry, 0 );
+        dfX = OGR_G_GetX( hGeometry, 0 ) + dfXMin;
+        dfY = OGR_G_GetY( hGeometry, 0 ) + dfYMin;
         dfU = OGR_F_GetFieldAsDouble( hFeature, nUIndex );
         dfV = OGR_F_GetFieldAsDouble( hFeature, nVIndex );
         TransformGeoToPixelSpace( adfInvGeoTransform, dfX, dfY, &nPixel, &nLine );
@@ -2093,8 +2093,8 @@ int NinjaFoam::SampleCloudGrid()
     while( (hFeature = OGR_L_GetNextFeature( hLayer )) != NULL )
     {
         hGeometry = OGR_F_GetGeometryRef( hFeature );
-        padfX[i] = OGR_G_GetX( hGeometry, 0 );
-        padfY[i] = OGR_G_GetY( hGeometry, 0 );
+        padfX[i] = OGR_G_GetX( hGeometry, 0 ) + dfXMin;
+        padfY[i] = OGR_G_GetY( hGeometry, 0 ) + dfYMin;
         padfU[i] = OGR_F_GetFieldAsDouble( hFeature, nUIndex );
         padfV[i] = OGR_F_GetFieldAsDouble( hFeature, nVIndex );
         i++;
