@@ -34,7 +34,6 @@ NinjaFoam::NinjaFoam() : ninja()
     pszTempPath = NULL;
     pszVrtMem = NULL;
     pszGridFilename = NULL;
-    pszCoarsenedDem = NULL;
 
     boundary_name = "";
     terrainName = "NAME";
@@ -86,7 +85,6 @@ NinjaFoam::~NinjaFoam()
     CPLFree( (void*)pszTempPath );
     CPLFree( (void*)pszVrtMem );
     CPLFree( (void*)pszGridFilename );
-    CPLFree( (void*)pszCoarsenedDem );
 }
 
 bool NinjaFoam::simulate_wind()
@@ -173,18 +171,11 @@ bool NinjaFoam::simulate_wind()
 
     input.Com->ninjaCom(ninjaComClass::ninjaNone, "Converting DEM to STL format...");
 
-    //coarsen DEM for snappyHexMesh
-    pszCoarsenedDem = CPLStrdup(CPLFormFilename(pszTempPath, "ninjaFoamSurface", ".asc"));
-
-    CPLDebug("NINJAFOAM", "original DEM resolution = %f", input.dem.get_cellSize());
-    
+    CPLDebug("NINJAFOAM", "DEM resolution = %f", input.dem.get_cellSize());
     if(input.dem.get_cellSize() < stlResolution){
         input.dem.resample_Grid_in_place(stlResolution, AsciiGrid<double>::order0);
+        CPLDebug("NINJAFOAM", "re-sampled DEM resolution (STL resolution) = %f", input.dem.get_cellSize());
     }
-
-    input.dem.write_Grid(pszCoarsenedDem, 2);
-
-    CPLDebug("NINJAFOAM", "original DEM resolution = %f", input.dem.get_cellSize());
 
     const char *pszStlFileName = CPLStrdup(CPLFormFilename(
                 (CPLSPrintf("%s/constant/triSurface/", pszTempPath)),
@@ -194,7 +185,7 @@ bool NinjaFoam::simulate_wind()
     int nBand = 1;
     CPLErr eErr;
 
-    eErr = NinjaElevationToStl(pszCoarsenedDem,
+    eErr = NinjaElevationToStl(input.dem.fileName.c_str(),
                         pszStlFileName,
                         nBand,
                         input.dem.get_cellSize(),
@@ -208,7 +199,6 @@ bool NinjaFoam::simulate_wind()
         NinjaUnlinkTree( pszTempPath );
         return NINJA_E_OTHER;
     }
-
 
     checkCancel();
 
@@ -234,7 +224,7 @@ bool NinjaFoam::simulate_wind()
         return NINJA_E_OTHER;
     }
 
-    if(input.stlFile != "!set"){ //only need surface check if we're using an stl as input
+//    if(input.stlFile != "!set"){ //only need surface check if we're using an stl as input
         input.Com->ninjaCom(ninjaComClass::ninjaNone, "Checking surface points in original terrain file...");
         status = SurfaceCheck();
         if(status != 0){
@@ -242,7 +232,7 @@ bool NinjaFoam::simulate_wind()
             NinjaUnlinkTree( pszTempPath );
             return NINJA_E_OTHER;
         }
-    }
+//    }
 
     checkCancel();
 
@@ -291,7 +281,6 @@ bool NinjaFoam::simulate_wind()
 
     checkCancel();
     
-
     //Translate surface geometry in z-direction
     status = SurfaceTransformPoints(0.0, 0.0, blockMeshDz, ("ground.stl"));
     if(status != 0){
@@ -1028,11 +1017,11 @@ int NinjaFoam::WriteUBoundaryField(std::string &dataString)
     return NINJA_SUCCESS;
 }
 
-int NinjaFoam::readLogFile(double &expansionRatio)
+int NinjaFoam::setBlockMeshBounds(double &expansionRatio)
 {
     const char *pszInput;
 
-    pszInput = CPLFormFilename(pszTempPath, "log", "json");
+    pszInput = CPLFormFilename(pszTempPath, "log", "surfaceCheck");
 
     VSILFILE *fin;
     fin = VSIFOpenL( pszInput, "r" );
@@ -1047,6 +1036,8 @@ int NinjaFoam::readLogFile(double &expansionRatio)
     data = (char*)CPLMalloc(offset * sizeof(char) + 1);
     VSIFReadL(data, offset, 1, fin);
     data[offset] = '\0';
+
+    double stlXmin, stlXmax, stlYmin, stlYmax, stlZmin, stlZmax;
 
     std::string s(data);
     std:string ss;
@@ -1063,38 +1054,56 @@ int NinjaFoam::readLogFile(double &expansionRatio)
         ss.append(s.substr(pos4+1, pos5-pos4-1));// xmin ymin zmin xmax ymax zmax
         found = ss.find(" ");
         if(found != ss.npos){
-            bbox.push_back(atof(ss.substr(0, found).c_str()) + 10); // xmin
-            bbox.push_back(atof(ss.substr(found).c_str()) + 10); // ymin
+            stlXmin = atof(ss.substr(0, found).c_str()); //xmin
+            stlYmin = atof(ss.substr(found).c_str()); //ymin  
         }
         found = ss.find(" ", found+1);
         if(found != ss.npos){
-            bbox.push_back(atof(ss.substr(found).c_str()) * 1.1); // zmin (should be above highest point in DEM)
+            stlZmin = atof(ss.substr(found).c_str()); //zmin 
         }
         found = ss.find(" ", found+1);
         if(found != ss.npos){
-            bbox.push_back(atof(ss.substr(found).c_str()) - 10); // xmax
+            stlXmax = atof(ss.substr(found).c_str()); //xmax 
         }
         found = ss.find(" ", found+1);
         if(found != ss.npos){
-            bbox.push_back(atof(ss.substr(found).c_str()) - 10); // ymax
+            stlYmax = atof(ss.substr(found).c_str()); //ymax
         }
         found = ss.find(" ", found+1);
         if(found != ss.npos){
-            bbox.push_back(atof(ss.substr(found).c_str()) * 2.5); // zmax
+            stlZmax = atof(ss.substr(found).c_str()); //zmax
         }
     }
     else{
-        cout<<"Bounding Box not found in log.json!"<<endl;
+        cout<<"Bounding Box not found in log.surfaceCheck!"<<endl;
         return NINJA_E_FILE_IO;
     }
+
+    //set blockMesh displacement height
+    //blockMeshDz = f(dz) ??
+
+    double dz = stlZmin - stlZmax;
+    double dx = stlXmax - stlXmin;
+    double dy = stlYmin - stlYmax;
+    double xBuffer, yBuffer;
+    
+    xBuffer = dx*0.01; //buffer for blockMesh
+    yBuffer = dy*0.01;
+   
+    bbox.push_back( stlXmin + xBuffer ); //xmin 
+    bbox.push_back( stlYmin - yBuffer ); //ymin
+    bbox.push_back( stlZmin * 0.9);// + blockMeshDz); //zmin (should be below lowest point in DEM)
+    bbox.push_back( stlXmax - xBuffer ); //xmax
+    bbox.push_back( stlYmax + yBuffer ); //ymax
+    bbox.push_back( stlZmax + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) + blockMeshDz); //zmax
 
     double meshVolume;
     double cellVolume;
     double side;
 
     meshVolume = (bbox[3] - bbox[0]) * (bbox[4] - bbox[1]) * (bbox[5] - bbox[2]); // total volume for block mesh
-    cellCount = 0.5 * input.meshCount; //half the cells in the blockMesh and half reserved for refineMesh
-    cellVolume = meshVolume/cellCount; // volume of 1 cell in zone1
+    cellCount = 0.5 * input.meshCount; //half the cells in the blockMesh and half reserved for SHM
+    cellVolume = meshVolume/cellCount; // volume of 1 cell
     side = std::pow(cellVolume, (1.0/3.0)); // length of side of regular hex cell
 
     nCells.push_back(int( (bbox[3] - bbox[0]) / side)); // Nx1
@@ -1102,11 +1111,40 @@ int NinjaFoam::readLogFile(double &expansionRatio)
     nCells.push_back(int( (bbox[5] - bbox[2]) / side)); // Nz1
 
     initialFirstCellHeight = ((bbox[5] - bbox[2]) / nCells[2]); //height of first cell
-    expansionRatio = 4.0;
-
-    CPLFree(data);
-    VSIFCloseL(fin);
-
+    expansionRatio = 1.0;
+    
+    //firstCellheight may be used later for setting BCs 
+    CopyFile(CPLFormFilename(pszTempPath, "0/U", ""), 
+            CPLFormFilename(pszTempPath, "0/U", ""), 
+            "-9999.9", 
+            CPLSPrintf("%.2f", initialFirstCellHeight));
+            
+    CopyFile(CPLFormFilename(pszTempPath, "0/k", ""), 
+            CPLFormFilename(pszTempPath, "0/k", ""), 
+            "-9999.9", 
+            CPLSPrintf("%.2f", initialFirstCellHeight));
+            
+    CopyFile(CPLFormFilename(pszTempPath, "0/epsilon", ""), 
+            CPLFormFilename(pszTempPath, "0/epsilon", ""), 
+            "-9999.9", 
+            CPLSPrintf("%.2f", initialFirstCellHeight));
+    
+    CPLDebug("NINJAFOAM", "meshVolume = %f", meshVolume);
+    CPLDebug("NINJAFOAM", "firstCellHeight = %f", initialFirstCellHeight);
+    CPLDebug("NINJAFOAM", "side = %f", side);
+    CPLDebug("NINJAFOAM", "expansionRatio = %f", expansionRatio);
+    
+    CPLDebug("NINJAFOAM", "Nx1 = %d", nCells[0]);
+    CPLDebug("NINJAFOAM", "Ny1 = %d", nCells[1]);
+    CPLDebug("NINJAFOAM", "Nz1 = %d", nCells[2]);
+    
+    CPLDebug("NINJAFOAM", "xmin = %f", bbox[0]);
+    CPLDebug("NINJAFOAM", "ymin = %f", bbox[1]);
+    CPLDebug("NINJAFOAM", "zmin = %f", bbox[2]);
+    CPLDebug("NINJAFOAM", "xmax = %f", bbox[3]);
+    CPLDebug("NINJAFOAM", "ymax = %f", bbox[4]);
+    CPLDebug("NINJAFOAM", "zmax = %f", bbox[5]);
+    
     return NINJA_SUCCESS;
 }
 
@@ -1123,13 +1161,13 @@ int NinjaFoam::readDem(double &expansionRatio)
     
     xBuffer = dx*0.01; //buffer for blockMesh
     yBuffer = dy*0.01;
-    
-    bbox.push_back( xBuffer ); //xmin 
-    bbox.push_back( yBuffer ); //ymin
-    bbox.push_back( input.dem.get_maxValue() * 1.1 ); //zmin (should be above highest point in DEM for MDM)
-    bbox.push_back( input.dem.get_xDimension() - xBuffer ); //xmax
-    bbox.push_back( input.dem.get_yDimension() - yBuffer ); //ymax
-    bbox.push_back( input.dem.get_maxValue() + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) ); //zmax
+   
+    bbox.push_back( input.dem.get_xllCorner() + xBuffer ); //xmin 
+    bbox.push_back( input.dem.get_yllCorner() + yBuffer ); //ymin
+    bbox.push_back( input.dem.get_minValue() * 0.9);// + blockMeshDz); //zmin (should be below lowest point in DEM)
+    bbox.push_back( input.dem.get_xllCorner() + input.dem.get_xDimension() - xBuffer ); //xmax
+    bbox.push_back( input.dem.get_yllCorner() + input.dem.get_yDimension() - yBuffer ); //ymax
+    bbox.push_back( input.dem.get_maxValue() + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) + blockMeshDz); //zmax
 
     double meshVolume;
     double cellVolume;
@@ -1191,17 +1229,9 @@ int NinjaFoam::writeBlockMesh()
     double ratio_;
     int status;
 
-    if(input.stlFile != "!set"){ //if an STL file was supplied and we don't have a DEM
-        status = readLogFile(ratio_);
-        if(status != 0){
-            //do something
-        }
-    }
-    else{
-        status = readDem(ratio_);
-        if(status != 0){
-            //do something
-        }
+    status = setBlockMeshBounds(ratio_);
+    if(status != 0){
+        //do something
     }
 
     pszPath = CPLGetConfigOption( "WINDNINJA_DATA", NULL );
@@ -1509,10 +1539,10 @@ int NinjaFoam::SurfaceCheck()
     const char *const papszArgv[] = { "surfaceCheck",
                                       "-case",
                                       pszTempPath,
-                                      CPLSPrintf("%s/constant/triSurface/%s.stl", pszTempPath, CPLGetBasename(input.dem.fileName.c_str())),
+                                      CPLSPrintf("%s/constant/triSurface/ground.stl", pszTempPath), 
                                       NULL };
 
-    VSILFILE *fout = VSIFOpenL(CPLFormFilename(pszTempPath, "log.json", ""), "w");
+    VSILFILE *fout = VSIFOpenL(CPLFormFilename(pszTempPath, "log.surfaceCheck", ""), "w");
 
     nRet = CPLSpawn(papszArgv, NULL, fout, TRUE); //writes log.json used in mesh file writing
 
@@ -2115,8 +2145,8 @@ int NinjaFoam::SampleCloudGrid()
     while( (hFeature = OGR_L_GetNextFeature( hLayer )) != NULL )
     {
         hGeometry = OGR_F_GetGeometryRef( hFeature );
-        padfX[i] = OGR_G_GetX( hGeometry, 0 ) + dfXMin;
-        padfY[i] = OGR_G_GetY( hGeometry, 0 ) + dfYMin;
+        padfX[i] = OGR_G_GetX( hGeometry, 0 ); // + dfXMin;
+        padfY[i] = OGR_G_GetY( hGeometry, 0 ); // + dfYMin;
         padfU[i] = OGR_F_GetFieldAsDouble( hFeature, nUIndex );
         padfV[i] = OGR_F_GetFieldAsDouble( hFeature, nVIndex );
         i++;

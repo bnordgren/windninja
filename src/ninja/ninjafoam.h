@@ -109,7 +109,6 @@ private:
     std::string template_;
     
     /* mesh */
-    const char *pszCoarsenedDem;
     double blockMeshDz; //displacement height for blockMesh
     double stlResolution; //resolution of stl for meshing/output sampling
     double meshResolution; //resolution of OpenFOAM mesh
@@ -127,7 +126,7 @@ private:
 
     int writeBlockMesh();
     int readDem(double &ratio_); //sets blockMesh data from DEM 
-    int readLogFile(double &ratio); //sets blockMesh data from STL log file when DEM not available
+    int setBlockMeshBounds(double &ratio); //sets blockMesh data from STL log file when DEM not available
     
     /* OpenFOAM case control */
     int simpleFoamEndTime; //set to last time directory
