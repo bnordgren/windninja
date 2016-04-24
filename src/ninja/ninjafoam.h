@@ -109,7 +109,9 @@ private:
     std::string template_;
     
     /* mesh */
-    double blockMeshDz; //displacement height for blockMesh
+    double extrudeMeshDz; //thickness of extruded layer (displacement height for blockMesh)
+    int extrudeMeshNumLayers; //number of layers in extruded layer
+    int extrudeMeshExpansionRatio; //expansion ratio for extruded layer
     double stlResolution; //resolution of stl for meshing/output sampling
     double meshResolution; //resolution of OpenFOAM mesh
     int ReadStl();

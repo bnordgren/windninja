@@ -50,7 +50,9 @@ NinjaFoam::NinjaFoam() : ninja()
     latestTime = 0;
     cellCount = 0; 
     simpleFoamEndTime = 1000; //initial value in controlDict_simpleFoam
-    blockMeshDz = 150.0; //displacement height for blockMesh
+    extrudeMeshDz = 150.0; //thickness of extruded layer (displacement height for blockMesh)
+    extrudeMeshNumLayers = 10; //number of layers in extruded layer
+    extrudeMeshExpansionRatio = 1; //expansion ratio for extruded layer
 
     meshResolution = -1.0; //approx resolution of OpenFOAM mesh
     stlResolution = 150.0; //resolution of stl surface for meshing/output sampling
@@ -282,7 +284,7 @@ bool NinjaFoam::simulate_wind()
     checkCancel();
     
     //Translate surface geometry in z-direction
-    status = SurfaceTransformPoints(0.0, 0.0, blockMeshDz, ("ground.stl"));
+    status = SurfaceTransformPoints(0.0, 0.0, extrudeMeshDz, ("ground.stl"));
     if(status != 0){
         input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during surfaceTransformPoints().");
         NinjaUnlinkTree( pszTempPath );
@@ -313,7 +315,8 @@ bool NinjaFoam::simulate_wind()
         return NINJA_E_OTHER;
     }
 
-    finalFirstCellHeight = initialFirstCellHeight/4; //refinement level (2 2)
+    //finalFirstCellHeight = initialFirstCellHeight/4; //refinement level (2 2)
+    finalFirstCellHeight = 15.0; //if extrudeMeshDz=150 and extrudeMeshLayers=10, cell height is 15. 
     latestTime = 0; 
     UpdateDictFiles();
     
@@ -1080,7 +1083,7 @@ int NinjaFoam::setBlockMeshBounds(double &expansionRatio)
     }
 
     //set blockMesh displacement height
-    //blockMeshDz = f(dz) ??
+    //extrudeMeshDz = f(dz) ??
 
     double dz = stlZmin - stlZmax;
     double dx = stlXmax - stlXmin;
@@ -1092,10 +1095,10 @@ int NinjaFoam::setBlockMeshBounds(double &expansionRatio)
    
     bbox.push_back( stlXmin + xBuffer ); //xmin 
     bbox.push_back( stlYmin - yBuffer ); //ymin
-    bbox.push_back( stlZmin * 0.9);// + blockMeshDz); //zmin (should be below lowest point in DEM)
+    bbox.push_back( stlZmin * 0.9);// + extrudeMeshDz); //zmin (should be below lowest point in DEM)
     bbox.push_back( stlXmax - xBuffer ); //xmax
     bbox.push_back( stlYmax + yBuffer ); //ymax
-    bbox.push_back( stlZmax + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) + blockMeshDz); //zmax
+    bbox.push_back( stlZmax + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) + extrudeMeshDz); //zmax
 
     double meshVolume;
     double cellVolume;
@@ -1151,7 +1154,7 @@ int NinjaFoam::setBlockMeshBounds(double &expansionRatio)
 int NinjaFoam::readDem(double &expansionRatio)
 {
     //set blockMesh displacement height
-    //blockMeshDz = f(dz) ??
+    //extrudeMeshDz = f(dz) ??
 
     // get some info from the DEM
     double dz = input.dem.get_maxValue() - input.dem.get_minValue();
@@ -1164,10 +1167,10 @@ int NinjaFoam::readDem(double &expansionRatio)
    
     bbox.push_back( input.dem.get_xllCorner() + xBuffer ); //xmin 
     bbox.push_back( input.dem.get_yllCorner() + yBuffer ); //ymin
-    bbox.push_back( input.dem.get_minValue() * 0.9);// + blockMeshDz); //zmin (should be below lowest point in DEM)
+    bbox.push_back( input.dem.get_minValue() * 0.9);// + extrudeMeshDz); //zmin (should be below lowest point in DEM)
     bbox.push_back( input.dem.get_xllCorner() + input.dem.get_xDimension() - xBuffer ); //xmax
     bbox.push_back( input.dem.get_yllCorner() + input.dem.get_yDimension() - yBuffer ); //ymax
-    bbox.push_back( input.dem.get_maxValue() + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) + blockMeshDz); //zmax
+    bbox.push_back( input.dem.get_maxValue() + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) + extrudeMeshDz); //zmax
 
     double meshVolume;
     double cellVolume;
@@ -1330,7 +1333,19 @@ int NinjaFoam::ExtrudeMesh()
     CopyFile(CPLFormFilename(pszTempPath, "system/extrudeMeshDict", ""),
            CPLFormFilename(pszTempPath, "system/extrudeMeshDict",""),
            "$FOAM_CASE", pszTempPath);
-    
+    CopyFile(CPLFormFilename(pszTempPath, "system/extrudeMeshDict", ""),
+           CPLFormFilename(pszTempPath, "system/extrudeMeshDict",""),
+           "thickness       -1",
+           CPLSPrintf("thickness       %.2f", extrudeMeshDz));
+    CopyFile(CPLFormFilename(pszTempPath, "system/extrudeMeshDict", ""),
+           CPLFormFilename(pszTempPath, "system/extrudeMeshDict",""),
+           "nLayers -1",
+           CPLSPrintf("nLayers %d", extrudeMeshNumLayers));
+    CopyFile(CPLFormFilename(pszTempPath, "system/extrudeMeshDict", ""),
+           CPLFormFilename(pszTempPath, "system/extrudeMeshDict",""),
+           "expansionRatio -1",
+           CPLSPrintf("expansionRatio %d", extrudeMeshExpansionRatio));
+
     const char *const papszArgv[] = { "extrudeMesh",
                                    "-case",
                                    pszTempPath,
