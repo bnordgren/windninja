@@ -50,7 +50,7 @@ NinjaFoam::NinjaFoam() : ninja()
     latestTime = 0;
     cellCount = 0; 
     simpleFoamEndTime = 1000; //initial value in controlDict_simpleFoam
-    extrudeMeshDz = 150.0; //thickness of extruded layer (displacement height for blockMesh)
+    extrudeMeshDz = -1.0; //thickness of extruded layer (displacement height for blockMesh)
     extrudeMeshNumLayers = 10; //number of layers in extruded layer
     extrudeMeshExpansionRatio = 1; //expansion ratio for extruded layer
 
@@ -179,22 +179,35 @@ bool NinjaFoam::simulate_wind()
         CPLDebug("NINJAFOAM", "re-sampled DEM resolution (STL resolution) = %f", input.dem.get_cellSize());
     }
 
+    //write coarsened DEM to disk so stl_create can read it
+    const char *pszCoarsenedDem = CPLStrdup(CPLFormFilename(
+                pszTempPath,
+                "ninjafoamCoarseDem", ""));
+    input.dem.write_Grid(pszCoarsenedDem, 2);
+
     const char *pszStlFileName = CPLStrdup(CPLFormFilename(
                 (CPLSPrintf("%s/constant/triSurface/", pszTempPath)),
                 "ground", ".stl"));
-                //CPLGetBasename(input.dem.fileName.c_str()), ".stl"));
 
     int nBand = 1;
     CPLErr eErr;
 
-    eErr = NinjaElevationToStl(input.dem.fileName.c_str(),
+//    eErr = NinjaElevationToStl(input.dem.fileName.c_str(),
+//                        pszStlFileName,
+//                        nBand,
+//                        input.dem.get_cellSize(),
+//                        NinjaStlBinary,
+//                        NULL);
+    eErr = NinjaElevationToStl(pszCoarsenedDem,
                         pszStlFileName,
                         nBand,
-                        input.dem.get_cellSize(),
+                        -1,
                         NinjaStlBinary,
                         NULL);
 
     CPLFree((void*)pszStlFileName);
+    //fee the coarse dem string
+    CPLFree((void*)pszCoarsenedDem);
 
     if(eErr != 0){
         input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error while converting DEM to STL format.");
@@ -283,7 +296,6 @@ bool NinjaFoam::simulate_wind()
 
     checkCancel();
     
-    //Translate surface geometry in z-direction
     status = SurfaceTransformPoints(0.0, 0.0, extrudeMeshDz, ("ground.stl"));
     if(status != 0){
         input.Com->ninjaCom(ninjaComClass::ninjaNone, "Error during surfaceTransformPoints().");
@@ -315,8 +327,7 @@ bool NinjaFoam::simulate_wind()
         return NINJA_E_OTHER;
     }
 
-    //finalFirstCellHeight = initialFirstCellHeight/4; //refinement level (2 2)
-    finalFirstCellHeight = 15.0; //if extrudeMeshDz=150 and extrudeMeshLayers=10, cell height is 15. 
+    finalFirstCellHeight = extrudeMeshDz/extrudeMeshNumLayers; 
     latestTime = 0; 
     UpdateDictFiles();
     
@@ -1082,9 +1093,6 @@ int NinjaFoam::setBlockMeshBounds(double &expansionRatio)
         return NINJA_E_FILE_IO;
     }
 
-    //set blockMesh displacement height
-    //extrudeMeshDz = f(dz) ??
-
     double dz = stlZmin - stlZmax;
     double dx = stlXmax - stlXmin;
     double dy = stlYmin - stlYmax;
@@ -1099,6 +1107,12 @@ int NinjaFoam::setBlockMeshBounds(double &expansionRatio)
     bbox.push_back( stlXmax - xBuffer ); //xmax
     bbox.push_back( stlYmax + yBuffer ); //ymax
     bbox.push_back( stlZmax + max((0.1 * max(dx, dy)), (dz + 0.1 *dz)) + extrudeMeshDz); //zmax
+
+    //set blockMesh displacement height
+    extrudeMeshDz = 0.15 * (bbox[5] - bbox[2]); //0.25 times height of blockMesh 
+
+    CPLDebug("NINJAFOAM", "extrudeMeshDz = %f", extrudeMeshDz);
+    CPLDebug("NINJAFOAM", "extrudeMeshNumLayers = %d", extrudeMeshNumLayers);
 
     double meshVolume;
     double cellVolume;
@@ -1365,7 +1379,7 @@ int NinjaFoam::SnappyHexMesh()
     double x, y, z;
     x = (bbox[0] + bbox[3])/2;
     y = (bbox[1] + bbox[4])/2;
-    z = (bbox[2] + bbox[5])/2;
+    z = bbox[5] - (bbox[5] - bbox[2]) * 0.01; //near the top
 
     int nLocalCells = input.meshCount/2; 
     int nGlobalCells = input.meshCount;
@@ -2079,8 +2093,8 @@ int NinjaFoam::SampleCloud()
     while( (hFeature = OGR_L_GetNextFeature( hLayer )) != NULL )
     {
         hGeometry = OGR_F_GetGeometryRef( hFeature );
-        dfX = OGR_G_GetX( hGeometry, 0 ) + dfXMin;
-        dfY = OGR_G_GetY( hGeometry, 0 ) + dfYMin;
+        dfX = OGR_G_GetX( hGeometry, 0 ); // + dfXMin;
+        dfY = OGR_G_GetY( hGeometry, 0 ); // + dfYMin;
         dfU = OGR_F_GetFieldAsDouble( hFeature, nUIndex );
         dfV = OGR_F_GetFieldAsDouble( hFeature, nVIndex );
         TransformGeoToPixelSpace( adfInvGeoTransform, dfX, dfY, &nPixel, &nLine );
