@@ -166,7 +166,7 @@ CPLErr NinjaElevationToStl( const char *pszInput,
     nAttrCount = 0;
 
 
-    pafScanline = (float*)VSIMalloc3( nXSize, nYSize, sizeof( float ) );
+    pafScanline = (float*)VSIMalloc3( nOutXSize, nOutYSize, sizeof( float ) );
     if( pafScanline == NULL )
     {
         CPLError( CE_Failure, CPLE_OutOfMemory,
