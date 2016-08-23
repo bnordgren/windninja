@@ -5,7 +5,9 @@ NOMADS Weather Model Information
 General
 -------
 
-NOMADS is the National Weather Service data dissemination server/service.  WindNinja can now download weather forecasts using this service, which may prove to be more reliable than past services.
+NOMADS is the National Weather Service data dissemination server/service.
+WindNinja can now download weather forecasts using this service, which may
+prove to be more reliable than past services.
 
 ### Available Models:
 <table>
