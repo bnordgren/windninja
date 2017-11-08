@@ -193,7 +193,12 @@ bool ncepHrrrSurfInitialization::identify( std::string fileName )
                 gc = poBand->GetMetadataItem( "GRIB_COMMENT" );
                 bandName = gc;
                 if( bandName.find( "u-component of wind [m/s]" ) == bandName.npos ){
-                    identified = false;
+                    poBand = srcDS->GetRasterBand( 52 ); //2016 files have different structure
+                    gc = poBand->GetMetadataItem( "GRIB_COMMENT" );
+                    bandName = gc;
+                    if( bandName.find( "u-component of wind [m/s]" ) == bandName.npos ){
+                        identified = false;
+                    }
                 }
             }
         }
@@ -201,7 +206,6 @@ bool ncepHrrrSurfInitialization::identify( std::string fileName )
     GDALClose( (GDALDatasetH)srcDS );
 
     return identified;
-
 }
 
 /**
@@ -249,7 +253,7 @@ void ncepHrrrSurfInitialization::setSurfaceGrids( WindNinjaInputs &input,
                 gc = poBand->GetMetadataItem( "GRIB_COMMENT" );
                 std::string bandName( gc );
 
-                if( bandName.find( "Temperature [K]" ) != bandName.npos ){
+                if( bandName.find( "Temperature [C]" ) != bandName.npos ){
                     gc = poBand->GetMetadataItem( "GRIB_SHORT_NAME" );
                     std::string bandName( gc );
                     if( bandName.find( "2-HTGL" ) != bandName.npos ){
