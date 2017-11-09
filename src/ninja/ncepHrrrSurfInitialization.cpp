@@ -316,7 +316,7 @@ void ncepHrrrSurfInitialization::setSurfaceGrids( WindNinjaInputs &input,
     CPLDebug("HRRR", "tcc: bandList[3] = %d", bandList[3]);
 
     if(bandList.size() < 4)
-        throw std::runtime_error("Could not match ninjaTime with a band number in the forecast file.");
+        throw std::runtime_error("Not enough bands could be identified in the forecast file.");
 
     std::string dstWkt;
     dstWkt = input.dem.prjString;
@@ -419,7 +419,6 @@ void ncepHrrrSurfInitialization::setSurfaceGrids( WindNinjaInputs &input,
     }
     wGrid.set_headerData( uGrid );
     wGrid = 0.0;
-    airGrid += 273.15;
 
     GDALDestroyWarpOptions( psWarpOptions );
     GDALClose((GDALDatasetH) srcDS );
