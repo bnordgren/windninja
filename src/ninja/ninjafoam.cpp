@@ -474,21 +474,11 @@ int NinjaFoam::WriteZeroFiles(VSILFILE *fin, VSILFILE *fout, const char *pszFile
         s.erase(0, pos+len);
     }
 
-    if(input.nonEqBc == 0){
-        if(std::string(pszFilename) == "epsilon"){
-            ReplaceKeys(s, "$wallFunction$", "epsilonWallFunction");
-        }
-        else if(std::string(pszFilename) == "nut"){
-            ReplaceKeys(s, "$wallFunction$", "nutkWallFunction");
-        }
+    if(std::string(pszFilename) == "epsilon"){
+        ReplaceKeys(s, "$wallFunction$", "epsilonNonEquiWallFunction");
     }
-    else{
-        if(std::string(pszFilename) == "epsilon"){
-            ReplaceKeys(s, "$wallFunction$", "epsilonNonEquiWallFunction");
-        }
-        else if(std::string(pszFilename) == "nut"){
-            ReplaceKeys(s, "$wallFunction$", "nutNonEquiWallFunction");
-        }
+    else if(std::string(pszFilename) == "nut"){
+        ReplaceKeys(s, "$wallFunction$", "nutNonEquiWallFunction");
     }
 
     dataString.append(s);

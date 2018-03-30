@@ -37,7 +37,6 @@ Description
 
 #include "fvCFD.H"
 #include "singlePhaseTransportModel.H"
-#include "RASModel.H"
 #include "wallDist.H"
 #include "scalar.H"
 
