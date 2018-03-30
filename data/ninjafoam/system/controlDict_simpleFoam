@@ -44,6 +44,7 @@ timePrecision   10;
 
 runTimeModifiable yes;
 libs ("$lib$")
+libs ("libsampling.so")
 functions
 (
 /*
