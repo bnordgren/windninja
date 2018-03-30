@@ -475,10 +475,10 @@ int NinjaFoam::WriteZeroFiles(VSILFILE *fin, VSILFILE *fout, const char *pszFile
     }
 
     if(std::string(pszFilename) == "epsilon"){
-        ReplaceKeys(s, "$wallFunction$", "epsilonNonEquiWallFunction");
+        ReplaceKeys(s, "$wallFunction$", "epsilonWallFunction");
     }
     else if(std::string(pszFilename) == "nut"){
-        ReplaceKeys(s, "$wallFunction$", "nutNonEquiWallFunction");
+        ReplaceKeys(s, "$wallFunction$", "nutkWallFunction");
     }
 
     dataString.append(s);
@@ -1497,6 +1497,9 @@ void NinjaFoam::UpdateDictFiles()
             
     CopyFile(CPLFormFilename(pszFoamPath, "0/p", ""), 
             CPLFormFilename(pszFoamPath, CPLSPrintf("%s/p", boost::lexical_cast<std::string>(latestTime).c_str()),  ""));
+
+    CopyFile(CPLFormFilename(pszFoamPath, "0/nut", ""), 
+            CPLFormFilename(pszFoamPath, CPLSPrintf("%s/nut", boost::lexical_cast<std::string>(latestTime).c_str()),  ""));
 }
 
 void NinjaFoam::UpdateSimpleFoamControlDict()
