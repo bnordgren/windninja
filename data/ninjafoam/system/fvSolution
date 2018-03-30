@@ -83,7 +83,7 @@ solvers
         relTol          1.0;
     };
 
-    cellDisplacement
+    "(cellDisplacement|cellDisplacementFinal)"
     {   
         solver          GAMG;
         tolerance       1e-08;
@@ -112,6 +112,24 @@ potentialFlow
 }
 
 SIMPLE
+{
+    nNonOrthogonalCorrectors 0;
+    pRefCell                 0;
+    pRefValue                0.0; // New variable
+
+    residualControl
+    {
+        p               0.00001;
+        U               0.00001;
+        k               0.00001;
+        epsilon         0.00001;
+        omega           1.0;
+        nuTilda         1.0;
+    }
+
+}
+
+PIMPLE
 {
     nNonOrthogonalCorrectors 0;
     pRefCell                 0;
