@@ -24,14 +24,13 @@ boundaryField
 $boundaryField$
     minZ
     {
-        type            zeroGradient;
+        type    zeroGradient;
     }
     maxZ
     {
-        type            fixedValue;
-        value           uniform 0;
+        type    fixedValue;
+        value   uniform 0;
     }
 }
-
 
 // ************************************************************************* //

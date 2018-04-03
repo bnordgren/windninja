@@ -24,14 +24,13 @@ boundaryField
 $boundaryField$    
     minZ
     {
-        type            kqRWallFunction;
-        value           uniform 0.1;
+        type    kqRWallFunction;
+        value   uniform 0.1;
     }
     maxZ
     {
-        type          zeroGradient;
+        type    zeroGradient;
     }
 }
-
 
 // ************************************************************************* //

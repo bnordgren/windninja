@@ -1817,10 +1817,12 @@ int NinjaFoam::Sample()
 {
     int nRet = -1;
 
-    const char *const papszArgv[] = { "sample", 
+    const char *const papszArgv[] = { "postProcess", 
                                       "-case",
                                       pszFoamPath,
-                                      "-latestTime", 
+                                      "-func", 
+                                      "system/sampleDict",
+                                      "-latestTime",
                                       NULL };
 
     VSILFILE *fout = VSIFOpenL(CPLFormFilename(pszFoamPath, "log.sample", ""), "w");
