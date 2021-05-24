@@ -86,8 +86,13 @@ else(WIN32)
     set(Boost_USE_STATIC_LIBS OFF)
 endif(WIN32)
 set(Boost_USE_MULTITHREAD OFF)
-find_package(Boost 1.75 COMPONENTS date_time program_options
+if(WIN32)
+    find_package(Boost 1.75 COMPONENTS date_time program_options
                                      unit_test_framework REQUIRED)
+else(WIN32)
+    find_package(Boost 1.46 COMPONENTS date_time program_options
+                                     unit_test_framework REQUIRED)
+endif(WIN32)
 
 # All GIS related libs.  Windows uses GIS_INTERNALS_HOME
 if(WIN32)
