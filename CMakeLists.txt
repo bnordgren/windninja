@@ -526,6 +526,8 @@ if(FIRELAB_PACKAGE AND WIN32 AND MSVC AND GIS_INTERNALS_HOME)
         install(PROGRAMS ${dll} DESTINATION bin COMPONENT apps)
     endforeach(dll ${dlls})
     install(PROGRAMS ${GIS_INTERNALS_HOME}/bin/gdal/plugins/gdal_netCDF.dll DESTINATION bin/gdalplugins COMPONENT app)
+    # Install proj.db
+    install(FILES ${GIS_INTERNALS_HOME}/bin/proj7/share/proj.db DESTINATION bin COMPONENT apps)
     if(NINJA_QTGUI)
         get_filename_component(qtbin ${QT_QMAKE_EXECUTABLE} DIRECTORY)
         string(REGEX REPLACE "\\\\" "/" qtbin "${qtbin}")

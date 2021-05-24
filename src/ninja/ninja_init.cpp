@@ -219,6 +219,7 @@ int NinjaInitialize()
     }
 #endif
     globalTimeZoneDB.load_from_file(FindDataPath("date_time_zonespec.csv"));
+
     CPLPopErrorHandler();
     return 0;
 }
