@@ -12,45 +12,15 @@
     <title>Leaflet.draw drawing and editing tools</title>
 
     <link rel="stylesheet" href="leaflet/leaflet.css"/>
-    <link rel="stylesheet" href="leaflet/draw/src/leaflet.draw.css"/>
+    <link rel="stylesheet" href="leaflet-draw/leaflet-draw.css"/>
+    <link rel="stylesheet" href="maplibre-gl-js/maplibre-gl.css"/>
 
-    <!-- TODO(kyle): prune dependencies -->
+    <script src="./maplibre-gl-js/maplibre-gl.js"></script>
     <script src="./leaflet/leaflet-src.js"></script>
+    <script src="./leaflet-draw/leaflet-draw.js"></script>
+    <script src="./esri-leaflet/esri-leaflet.js"></script>
+    <script src="./esri-leaflet-vector/esri-leaflet-vector.js"></script>
 
-    <script src="./leaflet/draw/src/Leaflet.draw.js"></script>
-    <script src="./leaflet/draw/src/Leaflet.Draw.Event.js"></script>
-
-    <script src="./leaflet/draw/src/edit/handler/Edit.Poly.js"></script>
-    <script src="./leaflet/draw/src/edit/handler/Edit.SimpleShape.js"></script>
-    <script src="./leaflet/draw/src/edit/handler/Edit.Rectangle.js"></script>
-    <script src="./leaflet/draw/src/edit/handler/Edit.Marker.js"></script>
-    <script src="./leaflet/draw/src/edit/handler/Edit.CircleMarker.js"></script>
-    <script src="./leaflet/draw/src/edit/handler/Edit.Circle.js"></script>
-
-    <script src="./leaflet/draw/src/draw/handler/Draw.Feature.js"></script>
-    <script src="./leaflet/draw/src/draw/handler/Draw.Polyline.js"></script>
-    <script src="./leaflet/draw/src/draw/handler/Draw.Polygon.js"></script>
-    <script src="./leaflet/draw/src/draw/handler/Draw.SimpleShape.js"></script>
-    <script src="./leaflet/draw/src/draw/handler/Draw.Rectangle.js"></script>
-    <script src="./leaflet/draw/src/draw/handler/Draw.Circle.js"></script>
-    <script src="./leaflet/draw/src/draw/handler/Draw.Marker.js"></script>
-    <script src="./leaflet/draw/src/draw/handler/Draw.CircleMarker.js"></script>
-
-    <script src="./leaflet/draw/src/ext/TouchEvents.js"></script>
-    <script src="./leaflet/draw/src/ext/LatLngUtil.js"></script>
-    <script src="./leaflet/draw/src/ext/GeometryUtil.js"></script>
-    <script src="./leaflet/draw/src/ext/LineUtil.Intersect.js"></script>
-    <script src="./leaflet/draw/src/ext/Polyline.Intersect.js"></script>
-    <script src="./leaflet/draw/src/ext/Polygon.Intersect.js"></script>
-
-    <script src="./leaflet/draw/src/Control.Draw.js"></script>
-    <script src="./leaflet/draw/src/Tooltip.js"></script>
-    <script src="./leaflet/draw/src/Toolbar.js"></script>
-
-    <script src="./leaflet/draw/src/draw/DrawToolbar.js"></script>
-    <script src="./leaflet/draw/src/edit/EditToolbar.js"></script>
-    <script src="./leaflet/draw/src/edit/handler/EditToolbar.Edit.js"></script>
-    <script src="./leaflet/draw/src/edit/handler/EditToolbar.Delete.js"></script>
 </head>
 <body>
  <div id="map" style="width: 100%; height: 100%; border: 1px solid #ccc"></div>
@@ -76,24 +46,19 @@
      }
      xhr.send(null);
     }
-    getKey();
+    // getKey();
 
-    // invalidate the key, use this static one for now.
-    apiKey = "pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw";
+    var apiKey = "AAPKf9ef3391313b4d7f900b7a18f102540aFpyZhpR4RoW0ZOGTZir7bOe6sxOSfmugdCTJqPl6_iBf1IkADvL6gnMZQ_DwbW1-" ;
+    var map = L.map("map", {
+      minZoom : 2
+    }) ; 
+    map.setView([43.62455, -113.2971], 8) ; 
+    var basemapEnum = "ArcGIS:Topographic" ; 
+    L.esri.Vector.vectorBasemapLayer(basemapEnum, {
+      apiKey: apiKey
+    }).addTo(map) ;
 
-    mbAtt = 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
-     '<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
-     'Imagery © <a href="https://www.mapbox.com/">Mapbox</a>'
 
-
-    mbl = L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoiYm5vcmRncmVuIiwiYSI6ImNsZmxuMHowZzAzaTczeG80ZXR3a2ZnNHEifQ.kc7P57DJg8tyDMjjP7czuQ', {
-     tileSize: 512,
-     maxZoom: 18,
-     zoomOffset: -1,
-     // attribution: mbAtt,
-     id: 'mapbox/streets-v11'
-    })
-    var map = new L.Map('map', {layers: [mbl], center: new L.LatLng(43.62455, -113.2971), zoom: 8});
     var mbrLayer = new L.FeatureGroup();
     map.addLayer(mbrLayer);
 

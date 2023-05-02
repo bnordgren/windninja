@@ -430,6 +430,12 @@ endforeach(f ${share_files})
 
 # Leaflet data
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/leaflet DESTINATION share/windninja)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/leaflet-draw DESTINATION share/windninja)
+# Maplibre-gl-ja data
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/maplibre-gl-js DESTINATION share/windninja)
+# Esri Leaflet data
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/esri-leaflet DESTINATION share/windninja)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/esri-leaflet-vector DESTINATION share/windninja)
 
 set(doc_files CLI_instructions.pdf
               displaying_wind_vectors_in_ArcMap.pdf
